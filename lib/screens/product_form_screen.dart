@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/product_model.dart';
 import '../services/product_service.dart';
 
 class ProductFormScreen extends StatefulWidget {
-  final Product? product;
-  const ProductFormScreen({super.key, this.product});
+  final Product? product; // product will be null if creating a new one
+
+  ProductFormScreen({this.product});
 
   @override
   _ProductFormScreenState createState() => _ProductFormScreenState();
@@ -19,13 +22,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   String qty = '';
   String totalPrice = '';
 
-  ProductService productService = ProductService();
-
+  // Initialize form with product data if editing
   @override
   void initState() {
     super.initState();
     if (widget.product != null) {
-      // Pre-fill values for editing
       productName = widget.product!.productName;
       productCode = widget.product!.productCode;
       img = widget.product!.img;
@@ -35,38 +36,58 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
-  _calculateTotalPrice() {
-    if (qty.isNotEmpty && unitPrice.isNotEmpty) {
-      final quantity = int.tryParse(qty) ?? 0;
-      final price = double.tryParse(unitPrice) ?? 0;
-      final total = quantity * price;
-      setState(() {
-        totalPrice = total.toStringAsFixed(2);
-      });
-    }
+  // Function to show Snackbar
+  void showConfirmationSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
-  _submitForm() async {
+  // Function to create or update the product
+  Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      Product product = Product(
-        productName: productName,
-        productCode: productCode,
-        img: img,
-        unitPrice: unitPrice,
-        qty: qty,
-        totalPrice: totalPrice,
-        createdDate: DateTime.now().toString(),
-      );
-
-      if (widget.product == null) {
-        await productService.createProduct(product);
-      } else {
-        await productService.updateProduct(widget.product!.id!, product);
+      try {
+        if (widget.product == null) {
+          // Create new product
+          await ProductService.createProduct(Product(
+            productName: productName,
+            productCode: productCode,
+            img: img,
+            unitPrice: unitPrice,
+            qty: qty,
+            totalPrice: (double.parse(unitPrice) * double.parse(qty)).toString(),
+            createdDate: DateTime.now().toString(),
+          ));
+          showConfirmationSnackbar('Product created successfully!');
+        } else {
+          // Update existing product
+          await ProductService.updateProduct(widget.product!.id!, Product(
+            productName: productName,
+            productCode: productCode,
+            img: img,
+            unitPrice: unitPrice,
+            qty: qty,
+            totalPrice: (double.parse(unitPrice) * double.parse(qty)).toString(),
+            createdDate: widget.product!.createdDate,
+          ));
+          showConfirmationSnackbar('Product updated successfully!');
+        }
+        Navigator.of(context).pop();
+      } catch (e) {
+        print('Error: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save product!'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-
-      Navigator.pop(context);
     }
   }
 
@@ -75,74 +96,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.product == null ? 'Create Product' : 'Edit Product'),
-        backgroundColor: Colors.purple, // Custom AppBar Color
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
-          child: ListView(
-            children: [
-              _buildTextField('Product Name', productName, (value) => productName = value!),
-              _buildTextField('Product Code', productCode, (value) => productCode = value!),
-              _buildTextField('Image URL', img, (value) => img = value!, isOptional: true),
-              _buildTextField('Unit Price', unitPrice, (value) {
-                unitPrice = value!;
-                _calculateTotalPrice(); // Recalculate total price
-              }, isNumeric: true),
-              _buildTextField('Quantity', qty, (value) {
-                qty = value!;
-                _calculateTotalPrice(); // Recalculate total price
-              }, isNumeric: true),
-              _buildTextField('Total Price', totalPrice, null, isNumeric: true, isReadOnly: true),
-              SizedBox(height: 20),
+          child: Column(
+            children: <Widget>[
+              TextFormField(
+                initialValue: productName,
+                decoration: InputDecoration(labelText: 'Product Name'),
+                validator: (value) {
+                  if (value!.isEmpty) {
+                    return 'Please enter a product name';
+                  }
+                  return null;
+                },
+                onSaved: (value) {
+                  productName = value!;
+                },
+              ),
+              // Other fields for productCode, img, unitPrice, qty
               ElevatedButton(
                 onPressed: _submitForm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple, // Button color
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  widget.product == null ? 'Create' : 'Update',
-                  style: TextStyle(color: Colors.white),
-                ),
+                child: Text(widget.product == null ? 'Create' : 'Update'),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(String label, String initialValue, void Function(String?)? onSaved,
-      {bool isNumeric = false, bool isReadOnly = false, bool isOptional = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextFormField(
-        initialValue: initialValue,
-        keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-        readOnly: isReadOnly,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.purple), // Label Color
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.purple), // Border color
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.purple), // Focused border color
-          ),
-        ),
-        onSaved: onSaved,
-        validator: isOptional ? null : (value) {
-          if (value == null || value.isEmpty) {
-            return '$label is required';
-          }
-          return null;
-        },
       ),
     );
   }

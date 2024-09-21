@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/product_service.dart';
 import '../models/product_model.dart';
+import '../services/product_service.dart';
 import 'product_form_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -9,8 +9,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  ProductService productService = ProductService();
   List<Product> products = [];
+  bool isLoading = true;
+  ProductService productService = ProductService();
+
+  void showConfirmationSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
 
   @override
   void initState() {
@@ -19,8 +31,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   _fetchProducts() async {
-    products = await productService.fetchProducts();
-    setState(() {});
+    try {
+      List<Product> fetchedProducts = await productService.getProducts();
+      setState(() {
+        products = fetchedProducts;
+        isLoading = false;
+      });
+    } catch (error) {
+      setState(() {
+        isLoading = false;
+      });
+      print('Error fetching products: $error');
+    }
   }
 
   _deleteProduct(String id) async {
@@ -33,93 +55,65 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Product List'),
-        centerTitle: true,
         backgroundColor: Colors.purple,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: products.isEmpty
-            ? Center(child: CircularProgressIndicator())
-            : ListView.builder(
-          itemCount: products.length,
-          itemBuilder: (context, index) {
-            final product = products[index];
-            return _buildProductCard(product);
-          },
-        ),
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : products.isEmpty
+          ? Center(child: Text('No Product Found'))
+          : ListView.builder(
+        itemCount: products.length,
+        itemBuilder: (context, index) {
+          final product = products[index];
+          return Card(
+            margin: EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.productName,
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Product Code: ${product.productCode}'),
+                  Text('Price: \$${product.unitPrice}'),
+                  Text('Quantity: ${product.qty}'),
+                  Text('Total Price: \$${product.totalPrice}'),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.edit, color: Colors.purple),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProductFormScreen(product: product),
+                            ),
+                          ).then((value) => _fetchProducts());
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: () => _deleteProduct(product.id!),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => ProductFormScreen()),
-          ).then((_) => _fetchProducts());
+          ).then((value) => _fetchProducts());
         },
         backgroundColor: Colors.purple,
         child: Icon(Icons.add),
-      ),
-    );
-  }
-
-  Widget _buildProductCard(Product product) {
-    return Card(
-      margin: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      elevation: 5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              product.productName,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text('Product Code: ${product.productCode}'),
-            Text('Price: \$${product.unitPrice}'),
-            Text('Quantity: ${product.qty}'),
-            Text('Total Price: \$${product.totalPrice}'),
-            SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductFormScreen(product: product),
-                      ),
-                    ).then((_) => _fetchProducts());
-                  },
-                  icon: Icon(Icons.edit, color: Colors.white),
-                  label: Text("Edit"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 10),
-                ElevatedButton.icon(
-                  onPressed: () => _deleteProduct(product.id!),
-                  icon: Icon(Icons.delete, color: Colors.white),
-                  label: Text("Delete"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
       ),
     );
   }
