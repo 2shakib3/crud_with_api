@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
         products = fetchedProducts;
         isLoading = false;
       });
+      print('Fetched Products: $products');
     } catch (error) {
       setState(() {
         isLoading = false;
@@ -44,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('Error fetching products: $error');
     }
   }
+
 
   _deleteProduct(String id) async {
     await productService.deleteProduct(id);
@@ -72,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.productName,
+                  Text('Name: ${product.productName}',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
                   Text('Product Code: ${product.productCode}'),
